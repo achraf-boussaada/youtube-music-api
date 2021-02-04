@@ -297,6 +297,62 @@ class YoutubeMusicApi {
     }
   }
 
+  getPlaylistAsync = async (browseId, contentLimit) => {
+    if (browseId.startsWith("VL") || browseId.startsWith("PL")) {
+      try {
+        const context = await this._createApiRequest(
+          "browse",
+          utils.buildEndpointContext("PLAYLIST", browseId)
+        );
+        try {
+          let result = parsers.parsePlaylistPage(context);
+          const getContinuations = async (params) => {
+            const context = await this._createApiRequest(
+              "browse",
+              {},
+              {
+                ctoken: params.continuation,
+                continuation: params.continuation,
+                itct: params.continuation.clickTrackingParams,
+              }
+            );
+            const continuationResult = parsers.parsePlaylistPage(context);
+            if (Array.isArray(continuationResult.content)) {
+              result.content = _.concat(
+                result.content,
+                continuationResult.content
+              );
+              result.continuation = continuationResult.continuation;
+            }
+          };
+
+          if (
+            result.trackCount > contentLimit &&
+            result.continuation.length > 0
+          ) {
+            for (const continuation of result.continuation) {
+              await getContinuations(continuation);
+            }
+          }
+          /* workaround until a fix is found */
+          result.trackCount = result.content.length;
+
+          return result;
+        } catch (error) {
+          return {
+            error: error.message,
+          };
+        }
+      } catch (error) {
+        return {
+          error: error.message,
+        };
+      }
+    } else {
+      throw new Error("invalid playlist id.");
+    }
+  };
+
   getArtist(browseId) {
     if (_.startsWith(browseId, "UC")) {
       return new Promise((resolve, reject) => {
