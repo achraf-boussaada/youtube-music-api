@@ -231,9 +231,8 @@ class YoutubeMusicApi {
     }
   }
 
-  getPlaylist(browseId, contentLimit = 100) {
-    if (_.startsWith(browseId, "VL") || _.startsWith(browseId, "PL")) {
-      _.startsWith(browseId, "PL") && (browseId = "VL" + browseId);
+  getPlaylist(browseId) {
+    if (browseId.startsWith("VL") || browseId.startsWith("PL")) {
       return new Promise((resolve, reject) => {
         this._createApiRequest(
           "browse",
@@ -242,48 +241,7 @@ class YoutubeMusicApi {
           .then((context) => {
             try {
               var result = parsers.parsePlaylistPage(context);
-              const getContinuations = (params) => {
-                this._createApiRequest(
-                  "browse",
-                  {},
-                  {
-                    ctoken: params.continuation,
-                    continuation: params.continuation,
-                    itct: params.continuation.clickTrackingParams,
-                  }
-                ).then((context) => {
-                  const continuationResult = parsers.parsePlaylistPage(context);
-                  if (Array.isArray(continuationResult.content)) {
-                    result.content = _.concat(
-                      result.content,
-                      continuationResult.content
-                    );
-                    result.continuation = continuationResult.continuation;
-                  }
-                  if (
-                    !Array.isArray(continuationResult.continuation) &&
-                    result.continuation instanceof Object
-                  ) {
-                    if (contentLimit > result.content.length) {
-                      getContinuations(continuationResult.continuation);
-                    } else {
-                      return resolve(result);
-                    }
-                  } else {
-                    return resolve(result);
-                  }
-                });
-              };
-
-              if (
-                contentLimit > result.content.length &&
-                !Array.isArray(result.continuation) &&
-                result.continuation instanceof Object
-              ) {
-                getContinuations(result.continuation);
-              } else {
-                return resolve(result);
-              }
+              return resolve(result);
             } catch (error) {
               return resolve({
                 error: error.message,
@@ -297,61 +255,28 @@ class YoutubeMusicApi {
     }
   }
 
-  getPlaylistAsync = async (browseId, contentLimit) => {
-    if (browseId.startsWith("VL") || browseId.startsWith("PL")) {
-      try {
-        const context = await this._createApiRequest(
-          "browse",
-          utils.buildEndpointContext("PLAYLIST", browseId)
-        );
-        try {
-          let result = parsers.parsePlaylistPage(context);
-          const getContinuations = async (params) => {
-            const context = await this._createApiRequest(
-              "browse",
-              {},
-              {
-                ctoken: params.continuation,
-                continuation: params.continuation,
-                itct: params.continuation.clickTrackingParams,
-              }
-            );
-            const continuationResult = parsers.parsePlaylistPage(context);
-            if (Array.isArray(continuationResult.content)) {
-              result.content = _.concat(
-                result.content,
-                continuationResult.content
-              );
-              result.continuation = continuationResult.continuation;
-            }
-          };
-
-          if (
-            result.trackCount > contentLimit &&
-            result.continuation.length > 0
-          ) {
-            for (const continuation of result.continuation) {
-              await getContinuations(continuation);
-            }
-          }
-          /* workaround until a fix is found */
-          result.trackCount = result.content.length;
-
-          return result;
-        } catch (error) {
-          return {
-            error: error.message,
-          };
+  getContinuations(params) {
+    return new Promise((resolve, reject) => {
+      this._createApiRequest(
+        "browse",
+        {},
+        {
+          ctoken: params.continuation,
+          continuation: params.continuation,
+          itct: params.continuation.clickTrackingParams,
         }
-      } catch (error) {
-        return {
-          error: error.message,
-        };
-      }
-    } else {
-      throw new Error("invalid playlist id.");
-    }
-  };
+      )
+        .then((context) => {
+          const continuationResult = parsers.parsePlaylistPage(context);
+          if (Array.isArray(continuationResult.content)) {
+            return resolve(continuationResult.content);
+          }
+        })
+        .catch((error) => {
+          return reject(error);
+        });
+    });
+  }
 
   getArtist(browseId) {
     if (_.startsWith(browseId, "UC")) {
